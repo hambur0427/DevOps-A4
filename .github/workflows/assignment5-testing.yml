@@ -1,0 +1,95 @@
+name: Assignment 5 - Build Test Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build
+        run: |
+          npm run build
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: assignment5-build
+          path: dist/
+          if-no-files-found: error
+
+  test-unit:
+    needs: build
+    runs-on: ubuntu-latest
+    env:
+      TEST_ENV: staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run unit tests
+        run: node --test test/assignment5-unit.test.js
+
+  test-integration:
+    needs: test-unit
+    runs-on: ubuntu-latest
+    env:
+      TEST_ENV: staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v4
+        with:
+          name: assignment5-build
+          path: dist/
+      - name: Run integration tests
+        run: node --test test/assignment5-integration.test.js
+
+  deploy-staging:
+    needs: test-integration
+    runs-on: ubuntu-latest
+    environment: staging
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+      TEST_ENV: staging
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: assignment5-build
+          path: dist/
+      - name: Release staging artifact
+        run: |
+          gh release create "a5-staging-${{ github.run_id }}-${{ github.run_attempt }}" dist/* --title "Assignment 5 staging ${{ github.run_number }}" --notes "Staging release after passing both testing stages."
+
+  deploy-production:
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+      TEST_ENV: prod
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: assignment5-build
+          path: dist/
+      - name: Release production artifact
+        run: |
+          gh release create "a5-prod-${{ github.run_id }}-${{ github.run_attempt }}" dist/* --title "Assignment 5 production ${{ github.run_number }}" --notes "Production release after successful tests, staging deployment, and environment approval (when configured)."
