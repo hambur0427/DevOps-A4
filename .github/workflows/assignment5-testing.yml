@@ -2,7 +2,7 @@ name: Assignment 5 - Build Test Deploy
 
 on:
   push:
-    branches: [main]
+    branches: [main, a5-failure-demo]
   workflow_dispatch:
 
 permissions:
